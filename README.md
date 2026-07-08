@@ -26,7 +26,7 @@ An intelligent CSV import tool that uses AI (Google Gemini) to automatically map
 | Frontend    | Next.js 15 (App Router), TypeScript |
 | Backend     | Node.js, Express.js, TypeScript   |
 | CSV Parsing | PapaParse                         |
-| AI          | Google Gemini (gemini-2.0-flash)  |
+| AI          | Google Gemini (gemini-3.1-flash-lite)  |
 | File Upload | Multer (server), HTML5 Drag & Drop |
 | Container   | Docker + Docker Compose           |
 
