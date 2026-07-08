@@ -1,6 +1,4 @@
-# AI-Powered CSV Importer for GrowEasy CRM
-
-An intelligent CSV import pipeline that ingests lead data from **any** CSV layout — Facebook Lead Ads exports, Google Ads exports, real estate CRM dumps, or manually maintained spreadsheets — and uses Google Gemini to map arbitrary, inconsistent column structures into a fixed, validated GrowEasy CRM schema.
+# AI-Powered CSV Importer 
 
 The core engineering problem this project solves is not CSV parsing. It is reliable, schema-constrained field mapping across heterogeneous, unpredictable input formats, with production-grade handling of AI failure modes: retries, timeouts, malformed responses, and invalid enum values.
 
