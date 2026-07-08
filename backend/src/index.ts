@@ -19,6 +19,9 @@ import importRouter from './routes/import.js';
 
 const app = express();
 
+// Trust the first proxy hop (adjust number if you have multiple proxies, e.g. Railway + nginx)
+app.set('trust proxy', 1);
+
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000';
 
