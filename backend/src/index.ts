@@ -23,7 +23,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+const FRONTEND_URL = (process.env.FRONTEND_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
 // ---------------------------------------------------------------------------
 // Middleware
@@ -32,7 +32,13 @@ const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000';
 /** Enable CORS for the configured frontend origin. */
 app.use(
   cors({
-    origin: FRONTEND_URL,
+    origin: (origin, callback) => {
+      if (!origin || origin === FRONTEND_URL) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
