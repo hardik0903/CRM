@@ -1,0 +1,6 @@
+Campaign,Ad Group,Keyword,Customer ID,First Name,Last Name,Email 1,Email 2,Phone 1,Phone 2,Conversion Date,Conversion Action
+Brand Search,Brand Terms,groweasy crm,GA_101,Arjun,Mehta,arjun.mehta@corp.com,arjun.personal@gmail.com,+91-9871234560,+91-11-23456789,2026-07-01T10:30:00Z,Lead Form Submit
+Generic Search,CRM Software,best crm india,GA_102,Lisa,Wong,lisa.w@enterprise.hk,,+852-91234567,,2026-07-02T14:15:00Z,Phone Call
+Brand Search,Brand Terms,groweasy pricing,GA_103,Carlos,Garcia,carlos@startup.mx,,+52-55-1234-5678,,2026-07-03T09:00:00Z,Lead Form Submit
+Competitor,Alternative CRM,salesforce alternative,GA_104,Fatima,Al-Rashid,fatima@business.ae,fatima.ar@outlook.com,+971-50-1234567,+971-4-5678901,2026-07-04T16:45:00Z,Lead Form Submit
+Display,Remarketing,remarketing_audience,GA_105,Ravi,Krishnan,ravi.k@techstartup.in,,+91-9445678901,,2026-07-05T11:20:00Z,Website Visit

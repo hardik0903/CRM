@@ -1,0 +1,8 @@
+Sr No,Person,Organisation,Mobile,Alternate Mobile,Primary Email,Secondary Email,Tertiary Email,Region,Remark,Added By,Date
+1,"Sharma, Rohit",ABC Industries,09876511111,09876522222,rohit@abc.com,rohit.sharma@gmail.com,r.sharma@hotmail.com,West India,Has 3 offices. Primary contact for Mumbai branch.,admin@groweasy.ai,01/06/2026
+2,Tanya Bhatia,XYZ Solutions,+91-98765-33333,,tanya@xyz.co.in,,,South India,"Budget approved, waiting for PO",sales@groweasy.ai,02/06/2026
+3,  David Lee  ,Global Tech LLC,+1 (415) 555-0100,,david.lee@globaltech.com,d.lee@personal.net,,USA,"International client, needs USD pricing. Time zone: PST",admin@groweasy.ai,03/06/2026
+4,,,,,,,,,Empty row with nothing,admin@groweasy.ai,04/06/2026
+5,Pradeep M,Solo Freelancer,WhatsApp: 9876544444,,pradeep.m@freelance.io,,,Karnataka,"Freelancer, interested in basic plan only",sales@groweasy.ai,05/06/2026
+6,"Al-Sayed, Omar",Middle East Trading Co,+971501234567,+97142345678,omar@metco.ae,omar.alsayed@gmail.com,,UAE,Key account. Annual contract discussion pending.,admin@groweasy.ai,06/06/2026
+7,Test Entry,Test Company,invalid_phone,also_invalid,not_an_email,,,Test Region,This is test data and should be handled gracefully,admin@groweasy.ai,07/06/2026

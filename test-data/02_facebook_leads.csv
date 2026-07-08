@@ -1,0 +1,8 @@
+ad_id,campaign_name,created_time,full_name,email,phone_number,city,platform
+fb_001,Summer Sale 2026,06/15/2026,Neha Sharma,neha.sharma@gmail.com,+919876501234,Mumbai,Facebook
+fb_002,Summer Sale 2026,06/15/2026,Vikram Reddy,vikram.r@yahoo.com,+918765432109,Hyderabad,Facebook
+fb_003,Diwali Offers,06/16/2026,Ananya Gupta,ananya.g@outlook.com,+917654321098,Delhi,Facebook
+fb_004,Diwali Offers,06/16/2026,Mohammed Iqbal,m.iqbal@hotmail.com,+916543210987,Chennai,Facebook
+fb_005,Summer Sale 2026,06/17/2026,Deepika Menon,deepika.m@gmail.com,+915432109876,Kochi,Facebook
+fb_006,Retargeting Q3,06/18/2026,Suresh Nair,,Trivandrum,Facebook
+fb_007,Retargeting Q3,06/18/2026,,retarget_lead7@test.com,+914321098765,Pune,Facebook
