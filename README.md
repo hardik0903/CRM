@@ -4,9 +4,8 @@ An intelligent CSV import pipeline that ingests lead data from **any** CSV layou
 
 The core engineering problem this project solves is not CSV parsing. It is reliable, schema-constrained field mapping across heterogeneous, unpredictable input formats, delivered inside a product experience that looks and behaves like it belongs in GrowEasy itself — with production-grade handling of every AI failure mode: retries, timeouts, malformed responses, invalid enum values, and total model unavailability.
 
-**Live application:** [crm-gamma-lime.vercel.app](https://crm-gamma-lime.vercel.app/)
-**Backend API:** [crm-91gx.onrender.com](https://crm-91gx.onrender.com/)
-**Position applied for:** Software Developer Intern
+**Live application:** [crm-gamma-hardik-pandey.vercel.app](https://crm-gamma-hardik-pandey.vercel.app/)
+
 
 ---
 
