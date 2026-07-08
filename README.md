@@ -53,17 +53,7 @@ This project builds that translation layer. A user uploads any valid CSV, previe
 
 ## Architecture
 
-```text
-┌──────────────────┐         ┌───────────────────┐         ┌─────────────────────┐
-│   Next.js UI      │  CSV    │   Express API      │  batch  │   Google Gemini      │
-│                    │ ─────▶ │                    │ ──────▶ │   (gemini-3.1-       │
-│  1. Upload         │         │  1. Multer upload   │         │    flash-lite)        │
-│  2. Preview (local) │         │  2. PapaParse       │         │                       │
-│  3. Confirm         │ ◀─────│  3. Batch (50/req)   │ ◀────── │  Structured JSON      │
-│  4. Results view    │  NDJSON│  4. Validate/Sanitize│  JSON   │  field mapping        │
-│                    │ stream │  5. Stream progress  │         │                       │
-└──────────────────┘         └───────────────────┘         └─────────────────────┘
-```
+![architecture](./arch.png)
 
 ## Tech Stack
 
