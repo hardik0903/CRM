@@ -43,7 +43,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [visibleRows, setVisibleRows] = useState(20);
-  const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [, setActiveMenu] = useState<number | null>(null);
 
   const handleImportComplete = useCallback((result: ImportResult) => {
     setImportResult(result);
@@ -91,7 +91,7 @@ export default function Home() {
 
   return (
     <div className={styles.layout}>
-      <Sidebar onImportClick={() => setImportModalOpen(true)} />
+      <Sidebar />
 
       <main className={styles.main}>
         {/* Top Header */}

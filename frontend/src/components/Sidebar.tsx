@@ -1,13 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import Image from 'next/image';
 import ThemeToggle from './ThemeToggle';
 import styles from './Sidebar.module.css';
-
-interface SidebarProps {
-  onImportClick: () => void;
-}
 
 const MAIN_NAV = [
   { key: 'manage', label: 'Manage Leads', icon: 'users', active: true },
@@ -44,7 +39,7 @@ function NavIcon({ name }: { name: string }) {
   }
 }
 
-export default function Sidebar({ onImportClick }: SidebarProps) {
+export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const toggleMobile = useCallback(() => {

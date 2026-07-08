@@ -45,6 +45,16 @@ export default function ImportModal({
     setError(null);
   }, []);
 
+  const resetAndClose = useCallback(() => {
+    setSelectedFile(null);
+    setPreviewData(null);
+    setError(null);
+    setIsProcessing(false);
+    setProgress(0);
+    setProcessingStatus('');
+    onClose();
+  }, [onClose]);
+
   const handleUpload = useCallback(async () => {
     if (!selectedFile) return;
     setError(null);
@@ -83,17 +93,7 @@ export default function ImportModal({
       );
       setIsProcessing(false);
     }
-  }, [selectedFile, onImportComplete]);
-
-  const resetAndClose = useCallback(() => {
-    setSelectedFile(null);
-    setPreviewData(null);
-    setError(null);
-    setIsProcessing(false);
-    setProgress(0);
-    setProcessingStatus('');
-    onClose();
-  }, [onClose]);
+  }, [selectedFile, onImportComplete, resetAndClose]);
 
   const handleClose = useCallback(() => {
     if (isProcessing) return;
