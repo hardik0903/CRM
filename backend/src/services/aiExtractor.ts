@@ -1,11 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import type {
   CRMRecord,
   ImportResult,
   RawCSVRecord,
   SkippedRecord,
 } from '../types/crm.js';
+import { CRMRecordSchema, GeminiResponseSchema } from '../types/schemas.js';
 import { buildExtractionPrompt } from '../utils/prompt.js';
+import { heuristicMapBatch } from './heuristicMapper.js';
 
 /** Maximum number of records per Gemini API call. */
 const BATCH_SIZE = 50;
@@ -19,26 +21,8 @@ const BASE_DELAY_MS = 1_000;
 /** Timeout (in ms) for each Gemini API call. */
 const API_TIMEOUT_MS = 60_000;
 
-/** Allowed CRM status values. */
-const VALID_CRM_STATUSES = new Set([
-  'GOOD_LEAD_FOLLOW_UP',
-  'DID_NOT_CONNECT',
-  'BAD_LEAD',
-  'SALE_DONE',
-  '',
-]);
-
-/** Allowed data source values. */
-const VALID_DATA_SOURCES = new Set([
-  'leads_on_demand',
-  'meridian_tower',
-  'eden_park',
-  'varah_swamy',
-  'sarjapur_plots',
-  '',
-]);
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Number of batches to process concurrently. */
+const CONCURRENCY = 3;
 
 export interface ExtractionProgress {
   phase: 'started' | 'batch_started' | 'batch_completed' | 'completed';
@@ -49,7 +33,72 @@ export interface ExtractionProgress {
 }
 
 /**
- * Initialises and returns the Gemini generative model.
+ * JSON Schema for Gemini's structured output.
+ * Defines the exact shape of the response we expect, eliminating the need
+ * for `stripCodeFences()` and prompt-based JSON enforcement.
+ */
+const RESPONSE_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    extracted: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          created_at: { type: SchemaType.STRING },
+          name: { type: SchemaType.STRING },
+          email: { type: SchemaType.STRING },
+          country_code: { type: SchemaType.STRING },
+          mobile_without_country_code: { type: SchemaType.STRING },
+          company: { type: SchemaType.STRING },
+          city: { type: SchemaType.STRING },
+          state: { type: SchemaType.STRING },
+          country: { type: SchemaType.STRING },
+          lead_owner: { type: SchemaType.STRING },
+          crm_status: { type: SchemaType.STRING },
+          crm_note: { type: SchemaType.STRING },
+          data_source: { type: SchemaType.STRING },
+          possession_time: { type: SchemaType.STRING },
+          description: { type: SchemaType.STRING },
+        },
+        required: [
+          'created_at',
+          'name',
+          'email',
+          'country_code',
+          'mobile_without_country_code',
+          'company',
+          'city',
+          'state',
+          'country',
+          'lead_owner',
+          'crm_status',
+          'crm_note',
+          'data_source',
+          'possession_time',
+          'description',
+        ],
+      },
+    },
+    skipped: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          rowIndex: { type: SchemaType.NUMBER },
+          reason: { type: SchemaType.STRING },
+        },
+        required: ['rowIndex', 'reason'],
+      },
+    },
+  },
+  required: ['extracted', 'skipped'],
+};
+
+/**
+ * Initialises and returns the Gemini generative model with structured
+ * output configuration. The model will return valid JSON matching
+ * {@link RESPONSE_SCHEMA} directly, without markdown code fences.
  *
  * @throws If the GEMINI_API_KEY environment variable is not set.
  */
@@ -62,30 +111,13 @@ function getModel() {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' });
-}
-
-/**
- * Strips markdown code fences (```json … ```) that the model sometimes
- * wraps around its JSON output.
- */
-function stripCodeFences(text: string): string {
-  let cleaned = text.trim();
-
-  // Remove opening ```json or ``` fence
-  if (cleaned.startsWith('```')) {
-    const firstNewline = cleaned.indexOf('\n');
-    if (firstNewline !== -1) {
-      cleaned = cleaned.slice(firstNewline + 1);
-    }
-  }
-
-  // Remove closing ``` fence
-  if (cleaned.endsWith('```')) {
-    cleaned = cleaned.slice(0, -3);
-  }
-
-  return cleaned.trim();
+  return genAI.getGenerativeModel({
+    model: 'gemini-3.1-flash-lite',
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: RESPONSE_SCHEMA,
+    } as any,
+  });
 }
 
 /**
@@ -111,68 +143,47 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function normalizeEmail(value: string): string {
-  return EMAIL_PATTERN.test(value) ? value : '';
-}
-
-function normalizeMobile(value: string): string {
-  const digits = value.replace(/\D/g, '');
-  if (digits.length < 7 || digits.length > 15) return '';
-  return digits;
-}
-
 /**
- * Sanitises a raw CRM record from the AI response.
+ * Sanitises a raw CRM record from the AI response using Zod schema
+ * validation. All fields are validated, normalised, and transformed.
  *
  * - Ensures all 15 CRM fields exist, defaulting missing ones to empty string.
  * - Validates `crm_status` is one of the allowed enum values.
  * - Validates `data_source` is one of the allowed enum values.
  * - Validates `created_at` is parseable by JavaScript's `new Date()`.
+ * - Normalises email format and mobile digit extraction.
  *
  * @param raw - The raw record object returned by the AI.
  * @returns A sanitised CRMRecord with valid values.
  */
 export function sanitizeCRMRecord(raw: Partial<CRMRecord>): CRMRecord {
-  const getString = (value: unknown): string => {
-    if (value === null || value === undefined) return '';
-    return String(value).trim();
-  };
-
-  const crmStatus = getString(raw.crm_status);
-  const dataSource = getString(raw.data_source);
-  const createdAt = getString(raw.created_at);
-  const email = normalizeEmail(getString(raw.email));
-  const mobile = normalizeMobile(getString(raw.mobile_without_country_code));
-
-  // Validate created_at is parseable by new Date()
-  let validCreatedAt = '';
-  if (createdAt) {
-    const date = new Date(createdAt);
-    if (!isNaN(date.getTime())) {
-      validCreatedAt = createdAt;
-    }
+  const result = CRMRecordSchema.safeParse(raw);
+  if (result.success) {
+    return result.data as CRMRecord;
   }
 
+  // If Zod parsing fails entirely, log the error and return an empty record.
+  // This should be extremely rare since all fields use z.any().transform().
+  console.warn(
+    '[sanitizeCRMRecord] Zod validation failed:',
+    result.error.message,
+  );
   return {
-    created_at: validCreatedAt,
-    name: getString(raw.name),
-    email,
-    country_code: getString(raw.country_code),
-    mobile_without_country_code: mobile,
-    company: getString(raw.company),
-    city: getString(raw.city),
-    state: getString(raw.state),
-    country: getString(raw.country),
-    lead_owner: getString(raw.lead_owner),
-    crm_status: VALID_CRM_STATUSES.has(crmStatus)
-      ? (crmStatus as CRMRecord['crm_status'])
-      : '',
-    crm_note: getString(raw.crm_note),
-    data_source: VALID_DATA_SOURCES.has(dataSource)
-      ? (dataSource as CRMRecord['data_source'])
-      : '',
-    possession_time: getString(raw.possession_time),
-    description: getString(raw.description),
+    created_at: '',
+    name: '',
+    email: '',
+    country_code: '',
+    mobile_without_country_code: '',
+    company: '',
+    city: '',
+    state: '',
+    country: '',
+    lead_owner: '',
+    crm_status: '',
+    crm_note: '',
+    data_source: '',
+    possession_time: '',
+    description: '',
   };
 }
 
@@ -181,6 +192,7 @@ export function sanitizeCRMRecord(raw: Partial<CRMRecord>): CRMRecord {
  * extracted CRM records and skipped entries.
  *
  * Implements retry with exponential backoff (1 s → 2 s → 4 s).
+ * Falls back to heuristic mapping if all retries are exhausted.
  *
  * @param records      - The batch of raw CSV records.
  * @param headers      - Original CSV column headers.
@@ -215,20 +227,20 @@ async function processBatch(
         throw new Error('Gemini returned an empty response.');
       }
 
-      const cleanedJSON = stripCodeFences(responseText);
-      const parsed = JSON.parse(cleanedJSON) as {
-        extracted: CRMRecord[];
-        skipped: Array<{ rowIndex: number; reason: string }>;
-      };
+      // With structured output, Gemini returns valid JSON directly.
+      // Parse and validate through Zod schema.
+      const rawParsed = JSON.parse(responseText);
+      const validated = GeminiResponseSchema.safeParse(rawParsed);
 
-      // Validate the response shape
-      if (!Array.isArray(parsed.extracted)) {
+      if (!validated.success) {
         throw new Error(
-          'Invalid Gemini response: "extracted" is not an array.',
+          `Invalid Gemini response shape: ${validated.error.message}`,
         );
       }
 
-      // Sanitise each extracted record, then enforce the assignment's
+      const parsed = validated.data;
+
+      // Sanitise each extracted record via Zod, then enforce the
       // contactability rule even if the model forgets to skip a bad row.
       const sanitizedRecords = parsed.extracted.map(sanitizeCRMRecord);
       const extractedWithContact: CRMRecord[] = [];
@@ -274,27 +286,51 @@ async function processBatch(
     }
   }
 
-  // All retries exhausted — mark every record in this batch as skipped
-  console.error(
-    `[Batch ${batchIndex + 1}] All ${MAX_RETRIES} attempts failed. Skipping entire batch.`,
+  // All retries exhausted — fall back to heuristic mapping instead of
+  // skipping the entire batch.
+  console.warn(
+    `[Batch ${batchIndex + 1}] All ${MAX_RETRIES} attempts failed. Falling back to heuristic mapping.`,
   );
 
-  const skipped: SkippedRecord[] = records.map((record, idx) => ({
-    rowIndex: idx + globalOffset,
-    originalData: record,
-    reason: `AI extraction failed after ${MAX_RETRIES} retries: ${lastError?.message ?? 'Unknown error'}`,
-  }));
+  return heuristicMapBatch(records, headers, globalOffset);
+}
 
-  return { extracted: [], skipped };
+/**
+ * Simple counting semaphore for limiting concurrency.
+ */
+class Semaphore {
+  private queue: (() => void)[] = [];
+  private running = 0;
+
+  constructor(private readonly maxConcurrency: number) {}
+
+  async acquire(): Promise<void> {
+    if (this.running < this.maxConcurrency) {
+      this.running++;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(() => {
+        this.running++;
+        resolve();
+      });
+    });
+  }
+
+  release(): void {
+    this.running--;
+    const next = this.queue.shift();
+    if (next) next();
+  }
 }
 
 /**
  * Extracts CRM-formatted records from raw CSV data using Google Gemini.
  *
- * Records are split into batches of {@link BATCH_SIZE} and each batch is
- * processed sequentially. Failed batches are retried up to
- * {@link MAX_RETRIES} times with exponential backoff before the records
- * are marked as skipped.
+ * Records are split into batches of {@link BATCH_SIZE} and batches are
+ * processed concurrently (up to {@link CONCURRENCY} at a time). Failed
+ * batches are retried up to {@link MAX_RETRIES} times with exponential
+ * backoff before falling back to heuristic mapping.
  *
  * @param records - All raw CSV records parsed from the uploaded file.
  * @param headers - The column headers from the original CSV.
@@ -312,7 +348,7 @@ export async function extractCRMRecords(
   // Split into batches
   const totalBatches = Math.ceil(records.length / BATCH_SIZE);
   console.log(
-    `Starting AI extraction: ${records.length} records in ${totalBatches} batch(es)`,
+    `Starting AI extraction: ${records.length} records in ${totalBatches} batch(es), concurrency=${CONCURRENCY}`,
   );
   onProgress?.({
     phase: 'started',
@@ -322,37 +358,52 @@ export async function extractCRMRecords(
     skipped: 0,
   });
 
-  for (let i = 0; i < totalBatches; i++) {
+  const semaphore = new Semaphore(CONCURRENCY);
+  let completedBatches = 0;
+
+  // Create batch tasks
+  const batchTasks = Array.from({ length: totalBatches }, (_, i) => {
     const start = i * BATCH_SIZE;
     const end = Math.min(start + BATCH_SIZE, records.length);
     const batch = records.slice(start, end);
 
-    onProgress?.({
-      phase: 'batch_started',
-      currentBatch: i + 1,
-      totalBatches,
-      imported: allExtracted.length,
-      skipped: allSkipped.length,
-    });
+    return async () => {
+      await semaphore.acquire();
+      try {
+        onProgress?.({
+          phase: 'batch_started',
+          currentBatch: i + 1,
+          totalBatches,
+          imported: allExtracted.length,
+          skipped: allSkipped.length,
+        });
 
-    const { extracted, skipped } = await processBatch(
-      batch,
-      headers,
-      i,
-      start,
-    );
+        const { extracted, skipped } = await processBatch(
+          batch,
+          headers,
+          i,
+          start,
+        );
 
-    allExtracted.push(...extracted);
-    allSkipped.push(...skipped);
+        allExtracted.push(...extracted);
+        allSkipped.push(...skipped);
+        completedBatches++;
 
-    onProgress?.({
-      phase: 'batch_completed',
-      currentBatch: i + 1,
-      totalBatches,
-      imported: allExtracted.length,
-      skipped: allSkipped.length,
-    });
-  }
+        onProgress?.({
+          phase: 'batch_completed',
+          currentBatch: completedBatches,
+          totalBatches,
+          imported: allExtracted.length,
+          skipped: allSkipped.length,
+        });
+      } finally {
+        semaphore.release();
+      }
+    };
+  });
+
+  // Execute all batches with concurrency control
+  await Promise.all(batchTasks.map((task) => task()));
 
   console.log(
     `AI extraction complete: ${allExtracted.length} imported, ${allSkipped.length} skipped`,

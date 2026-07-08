@@ -51,8 +51,8 @@ describe('buildExtractionPrompt', () => {
     expect(prompt).toContain('sarjapur_plots');
   });
 
-  it('should instruct JSON-only response', () => {
+  it('should include output instructions for structured response', () => {
     const prompt = buildExtractionPrompt([{ x: '1' }], ['x']);
-    expect(prompt).toContain('ONLY a valid JSON');
+    expect(prompt).toContain('structured JSON output');
   });
 });

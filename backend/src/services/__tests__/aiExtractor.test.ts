@@ -12,6 +12,12 @@ jest.mock('@google/generative-ai', () => ({
       generateContent: (...args: unknown[]) => generateContentMock(...args),
     }),
   })),
+  SchemaType: {
+    OBJECT: 'OBJECT',
+    ARRAY: 'ARRAY',
+    STRING: 'STRING',
+    NUMBER: 'NUMBER',
+  },
 }));
 
 /** Wraps a JSON payload the way Gemini's SDK response object is shaped. */
@@ -153,22 +159,40 @@ describe('extractCRMRecords', () => {
     expect(result.records[0].email).toBe('jane@test.com');
   });
 
-  it('strips markdown code fences before parsing', async () => {
+  it('handles structured JSON output without code fences', async () => {
+    // With structured output, Gemini returns clean JSON directly.
+    // This test verifies direct JSON parsing works.
     generateContentMock.mockResolvedValueOnce(
       fakeGeminiResponse(
-        '```json\n' +
-          JSON.stringify({
-            extracted: [{ ...emptyRecord(), email: 'fenced@test.com' }],
-            skipped: [],
-          }) +
-          '\n```',
+        JSON.stringify({
+          extracted: [{ ...emptyRecord(), email: 'direct@test.com' }],
+          skipped: [],
+        }),
       ),
     );
 
     const result = await extractCRMRecords([RAW_RECORD], ['name', 'email']);
 
-    expect(result.records[0].email).toBe('fenced@test.com');
+    expect(result.records[0].email).toBe('direct@test.com');
   });
+
+  it('retries when Gemini returns invalid JSON and succeeds on later attempt', async () => {
+    generateContentMock
+      .mockResolvedValueOnce(fakeGeminiResponse('not valid json {{{'))
+      .mockResolvedValueOnce(
+        fakeGeminiResponse(
+          JSON.stringify({
+            extracted: [{ ...emptyRecord(), email: 'recovered@test.com' }],
+            skipped: [],
+          }),
+        ),
+      );
+
+    const result = await extractCRMRecords([RAW_RECORD], ['name', 'email']);
+
+    expect(generateContentMock).toHaveBeenCalledTimes(2);
+    expect(result.records[0].email).toBe('recovered@test.com');
+  }, 10_000);
 
   it('splits records into multiple batches of 50', async () => {
     const records = Array.from({ length: 75 }, (_, i) => ({
@@ -209,34 +233,19 @@ describe('extractCRMRecords', () => {
     expect(result.records[0].email).toBe('retried@test.com');
   }, 10_000);
 
-  it('marks the whole batch as skipped after exhausting all retries', async () => {
+  it('falls back to heuristic mapping when all retries are exhausted', async () => {
     generateContentMock.mockRejectedValue(new Error('persistent failure'));
 
-    const result = await extractCRMRecords([RAW_RECORD], ['name', 'email']);
+    // RAW_RECORD has email: 'jane@test.com' — the heuristic mapper
+    // should detect the 'email' column and extract the record.
+    const result = await extractCRMRecords([RAW_RECORD], ['name', 'email', 'phone']);
 
     // MAX_RETRIES = 3
     expect(generateContentMock).toHaveBeenCalledTimes(3);
-    expect(result.totalImported).toBe(0);
-    expect(result.totalSkipped).toBe(1);
-    expect(result.skipped[0].reason).toContain('persistent failure');
-  }, 10_000);
-
-  it('treats malformed JSON as a failure and retries', async () => {
-    generateContentMock
-      .mockResolvedValueOnce(fakeGeminiResponse('not valid json {{{'))
-      .mockResolvedValueOnce(
-        fakeGeminiResponse(
-          JSON.stringify({
-            extracted: [{ ...emptyRecord(), email: 'recovered@test.com' }],
-            skipped: [],
-          }),
-        ),
-      );
-
-    const result = await extractCRMRecords([RAW_RECORD], ['name', 'email']);
-
-    expect(generateContentMock).toHaveBeenCalledTimes(2);
-    expect(result.records[0].email).toBe('recovered@test.com');
+    // Heuristic should extract the record (it has an email)
+    expect(result.totalImported).toBe(1);
+    expect(result.records[0].email).toBe('jane@test.com');
+    expect(result.records[0].crm_note).toBe('[heuristic-mapped]');
   }, 10_000);
 
   it('skips AI-extracted records that still have no email or mobile', async () => {

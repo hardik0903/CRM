@@ -1,3 +1,5 @@
+import Script from 'next/script';
+
 // This script runs before React hydration to prevent flash of wrong theme.
 // It reads the user's preference from localStorage and applies it immediately.
 export function ThemeScript() {
@@ -10,5 +12,5 @@ export function ThemeScript() {
       } catch(e) {}
     })();
   `;
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  return <Script id="theme-script" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: script }} />;
 }

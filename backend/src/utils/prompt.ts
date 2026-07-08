@@ -53,30 +53,6 @@ ${headersStr}
 ## Records to Process
 ${recordsStr}
 
-## Response Format
-Respond with ONLY a valid JSON object (no markdown, no explanation) in this exact format:
-{
-  "extracted": [
-    {
-      "created_at": "",
-      "name": "",
-      "email": "",
-      "country_code": "",
-      "mobile_without_country_code": "",
-      "company": "",
-      "city": "",
-      "state": "",
-      "country": "",
-      "lead_owner": "",
-      "crm_status": "",
-      "crm_note": "",
-      "data_source": "",
-      "possession_time": "",
-      "description": ""
-    }
-  ],
-  "skipped": [
-    { "rowIndex": 0, "reason": "description of why it was skipped" }
-  ]
-}`;
+## Output Instructions
+Map each record to the CRM fields listed above following the critical rules. Return the result as the structured JSON output.`;
 }
