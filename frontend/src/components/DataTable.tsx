@@ -48,7 +48,8 @@ const CRM_FIELD_LABELS: Record<string, string> = {
   description: 'Description',
 };
 
-const ROWS_PER_PAGE = 50;
+const ROW_HEIGHT = 41;
+const OVERSCAN_ROWS = 8;
 
 export default function DataTable({
   headers: propHeaders,
@@ -57,7 +58,7 @@ export default function DataTable({
   title,
   crmRecords,
 }: DataTableProps) {
-  const [currentPage, setCurrentPage] = useState(1);
+  const [scrollTop, setScrollTop] = useState(0);
 
   const { headers, rows } = useMemo(() => {
     if (crmRecords && crmRecords.length > 0) {
@@ -70,11 +71,21 @@ export default function DataTable({
     return { headers: propHeaders, rows: propRows };
   }, [propHeaders, propRows, crmRecords]);
 
-  const totalPages = Math.ceil(rows.length / ROWS_PER_PAGE);
-  const currentRows = useMemo(() => {
-    const start = (currentPage - 1) * ROWS_PER_PAGE;
-    return rows.slice(start, start + ROWS_PER_PAGE);
-  }, [rows, currentPage]);
+  const viewportHeight = Number.parseInt(maxHeight, 10) || 480;
+  const totalHeight = rows.length * ROW_HEIGHT;
+  const visibleWindow = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN_ROWS * 2;
+  const maxStartIndex = Math.max(0, rows.length - visibleWindow);
+  const startIndex = Math.min(
+    maxStartIndex,
+    Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN_ROWS),
+  );
+  const endIndex = Math.min(rows.length, startIndex + visibleWindow);
+  const visibleRows = rows.slice(startIndex, endIndex);
+  const topSpacerHeight = startIndex * ROW_HEIGHT;
+  const bottomSpacerHeight = Math.max(
+    0,
+    totalHeight - topSpacerHeight - visibleRows.length * ROW_HEIGHT,
+  );
 
   if (headers.length === 0 && rows.length === 0) {
     return (
@@ -99,8 +110,12 @@ export default function DataTable({
           </span>
         </div>
       )}
-      <div className={styles.tableWrapper} style={{ maxHeight }}>
-        <table className={styles.table} role="table">
+      <div
+        className={styles.tableWrapper}
+        style={{ maxHeight }}
+        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+      >
+        <table className={styles.table} role="table" aria-rowcount={rows.length}>
           <thead className={styles.thead}>
             <tr>
               <th className={styles.thIndex}>#</th>
@@ -112,8 +127,17 @@ export default function DataTable({
             </tr>
           </thead>
           <tbody>
-            {currentRows.map((row, rowIdx) => {
-              const globalIdx = (currentPage - 1) * ROWS_PER_PAGE + rowIdx + 1;
+            {topSpacerHeight > 0 && (
+              <tr aria-hidden="true">
+                <td
+                  className={styles.spacerCell}
+                  colSpan={headers.length + 1}
+                  style={{ height: topSpacerHeight }}
+                />
+              </tr>
+            )}
+            {visibleRows.map((row, rowIdx) => {
+              const globalIdx = startIndex + rowIdx + 1;
               return (
                 <tr key={globalIdx} className={styles.tr}>
                   <td className={styles.tdIndex}>{globalIdx}</td>
@@ -123,51 +147,30 @@ export default function DataTable({
                       className={styles.td}
                       title={row[colIdx] || ''}
                     >
-                      {row[colIdx] || '—'}
+                      {row[colIdx] || '-'}
                     </td>
                   ))}
                 </tr>
               );
             })}
+            {bottomSpacerHeight > 0 && (
+              <tr aria-hidden="true">
+                <td
+                  className={styles.spacerCell}
+                  colSpan={headers.length + 1}
+                  style={{ height: bottomSpacerHeight }}
+                />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className={styles.pagination}>
-          <button
-            className={styles.pageBtn}
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Previous
-          </button>
-          <span className={styles.pageInfo}>
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            className={styles.pageBtn}
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Next
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {!title && totalPages <= 1 && (
-        <div className={styles.footer}>
-          <span className={styles.rowCount}>
-            {rows.length} {rows.length === 1 ? 'row' : 'rows'}
-          </span>
-        </div>
-      )}
+      <div className={styles.footer}>
+        <span className={styles.rowCount}>
+          {rows.length} {rows.length === 1 ? 'row' : 'rows'}
+        </span>
+      </div>
     </div>
   );
 }

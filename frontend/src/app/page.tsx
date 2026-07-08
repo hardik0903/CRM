@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { AppStep, ImportResult } from '@/types';
 import { CSVPreviewData, parseCSVForPreview } from '@/lib/csvPreview';
-import { importCSV } from '@/lib/api';
+import { importCSVWithProgress } from '@/lib/api';
 import ThemeToggle from '@/components/ThemeToggle';
 import StepIndicator from '@/components/StepIndicator';
 import FileUpload from '@/components/FileUpload';
@@ -18,6 +18,7 @@ export default function Home() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [processingStatus, setProcessingStatus] = useState('Preparing import...');
   const [error, setError] = useState<string | null>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -45,22 +46,34 @@ export default function Home() {
     setCurrentStep('processing');
     setIsProcessing(true);
     setProgress(0);
-    
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 90) return prev;
-        return prev + Math.random() * 8;
-      });
-    }, 500);
+    setProcessingStatus('Uploading and parsing CSV...');
 
     try {
-      const result = await importCSV(selectedFile);
+      const result = await importCSVWithProgress(selectedFile, (event) => {
+        setProgress(event.progress);
+
+        if (event.phase === 'parsing') {
+          setProcessingStatus('Parsing CSV...');
+        } else if (event.phase === 'parsed') {
+          setProcessingStatus(
+            `Parsed ${event.totalRecords ?? 0} records. Starting AI extraction...`,
+          );
+        } else if (event.phase === 'batch_started') {
+          setProcessingStatus(
+            `Processing batch ${event.currentBatch} of ${event.totalBatches}...`,
+          );
+        } else if (event.phase === 'batch_completed') {
+          setProcessingStatus(
+            `Processed batch ${event.currentBatch} of ${event.totalBatches}. Imported ${event.imported ?? 0}, skipped ${event.skipped ?? 0}.`,
+          );
+        } else if (event.phase === 'completed') {
+          setProcessingStatus('Finalizing results...');
+        }
+      });
       setProgress(100);
-      clearInterval(progressInterval);
       setImportResult(result);
       setCurrentStep('results');
     } catch (err) {
-      clearInterval(progressInterval);
       setError(err instanceof Error ? err.message : 'Import failed. Please try again.');
       setCurrentStep('preview');
     } finally {
@@ -82,6 +95,7 @@ export default function Home() {
     setImportResult(null);
     setIsProcessing(false);
     setProgress(0);
+    setProcessingStatus('Preparing import...');
     setError(null);
   }, []);
 
@@ -230,7 +244,7 @@ export default function Home() {
               </div>
               <h2 className={styles.processingTitle}>AI is analyzing your data</h2>
               <p className={styles.processingDescription}>
-                Mapping columns, validating records, and transforming your data into CRM format...
+                {processingStatus}
               </p>
               <div className={styles.processingDots}>
                 <span className={styles.dot} style={{ animationDelay: '0ms' }} />

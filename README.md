@@ -1,58 +1,100 @@
 # AI-Powered CSV Importer for GrowEasy CRM
 
-An intelligent CSV import tool that uses AI (Google Gemini) to automatically map and extract CRM lead information from any CSV format — regardless of column names, layouts, or structures.
+An AI-powered CSV import tool that accepts CSV files with different column names, layouts, and structures, then maps lead data into the GrowEasy CRM format using Google Gemini.
 
-![Tech Stack](https://img.shields.io/badge/Frontend-Next.js-black?style=for-the-badge&logo=next.js)
-![Tech Stack](https://img.shields.io/badge/Backend-Express.js-000000?style=for-the-badge&logo=express)
-![Tech Stack](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?style=for-the-badge&logo=google)
-![Tech Stack](https://img.shields.io/badge/Language-TypeScript-3178C6?style=for-the-badge&logo=typescript)
+## Features
 
-## ✨ Features
+- Upload CSV files with drag and drop or file picker
+- Preview parsed CSV data before any AI processing
+- Confirm import before calling the backend
+- Extract GrowEasy CRM records with Gemini
+- Batch AI processing with retries
+- Skip invalid rows that have no valid email or mobile number
+- Display imported and skipped records in responsive tables
+- Export parsed CRM records as CSV
+- Dark and light mode
+- Docker setup
+- Backend unit tests
 
-- **Universal CSV Import** — Works with any CSV format (Facebook Leads, Google Ads, Excel exports, custom spreadsheets)
-- **AI-Powered Mapping** — Uses Google Gemini to intelligently map arbitrary columns to CRM fields
-- **Drag & Drop Upload** — Beautiful drag-and-drop interface with file validation
-- **Live CSV Preview** — Responsive table with sticky headers and scrolling
-- **Batch Processing** — Processes large CSVs in batches of 50 records
-- **Retry Mechanism** — Automatic retry with exponential backoff for failed AI batches
-- **Dark Mode** — Premium dark/light mode toggle
-- **Responsive Design** — Works beautifully on desktop, tablet, and mobile
-- **Export Results** — Download extracted CRM records as CSV
+## Tech Stack
 
-## 🛠 Tech Stack
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js, React, TypeScript |
+| Backend | Node.js, Express, TypeScript |
+| CSV parsing | PapaParse |
+| AI | Google Gemini |
+| Uploads | Multer |
+| Testing | Jest |
+| Containerization | Docker, Docker Compose |
 
-| Layer       | Technology                        |
-|-------------|-----------------------------------|
-| Frontend    | Next.js 15 (App Router), TypeScript |
-| Backend     | Node.js, Express.js, TypeScript   |
-| CSV Parsing | PapaParse                         |
-| AI          | Google Gemini (gemini-3.1-flash-lite)  |
-| File Upload | Multer (server), HTML5 Drag & Drop |
-| Container   | Docker + Docker Compose           |
+## CRM Fields
 
-## 📋 Prerequisites
+The importer extracts the following fields when available:
 
-- **Node.js** >= 18.x
-- **npm** >= 9.x
-- **Google Gemini API Key** — Get one free at [Google AI Studio](https://aistudio.google.com/apikey)
+- `created_at`
+- `name`
+- `email`
+- `country_code`
+- `mobile_without_country_code`
+- `company`
+- `city`
+- `state`
+- `country`
+- `lead_owner`
+- `crm_status`
+- `crm_note`
+- `data_source`
+- `possession_time`
+- `description`
 
-## 🚀 Quick Start
+Allowed `crm_status` values:
 
-### 1. Clone the Repository
+- `GOOD_LEAD_FOLLOW_UP`
+- `DID_NOT_CONNECT`
+- `BAD_LEAD`
+- `SALE_DONE`
 
-```bash
-git clone https://github.com/YOUR_USERNAME/csv-importer.git
-cd csv-importer
-```
+Allowed `data_source` values:
 
-### 2. Setup Backend
+- `leads_on_demand`
+- `meridian_tower`
+- `eden_park`
+- `varah_swamy`
+- `sarjapur_plots`
+
+## How It Works
+
+1. Upload a CSV file.
+2. The frontend parses the CSV locally and shows a preview table.
+3. Click **Confirm Import** to send the file to the backend.
+4. The backend parses the CSV and sends records to Gemini in batches.
+5. Gemini maps fields into the GrowEasy CRM schema.
+6. The backend validates and sanitizes AI output.
+7. The frontend displays imported records, skipped records, and totals.
+
+Rows with neither a valid email nor a valid mobile number are skipped.
+
+## Prerequisites
+
+- Node.js 18 or newer
+- npm 9 or newer
+- Google Gemini API key
+
+Create a Gemini API key from Google AI Studio:
+
+https://aistudio.google.com/apikey
+
+## Local Setup
+
+### Backend
 
 ```bash
 cd backend
 npm install
 ```
 
-Create a `.env` file:
+Create `backend/.env`:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -66,18 +108,20 @@ Start the backend:
 npm run dev
 ```
 
-The backend runs on **http://localhost:3001**.
+The backend runs at:
 
-### 3. Setup Frontend
+```text
+http://localhost:3001
+```
 
-Open a new terminal:
+### Frontend
 
 ```bash
 cd frontend
 npm install
 ```
 
-Create a `.env.local` file:
+Create `frontend/.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
@@ -89,123 +133,112 @@ Start the frontend:
 npm run dev
 ```
 
-The frontend runs on **http://localhost:3000**.
+The frontend runs at:
 
-### 4. Open the App
+```text
+http://localhost:3000
+```
 
-Navigate to [http://localhost:3000](http://localhost:3000) in your browser.
+## Docker Setup
 
-## 🐳 Docker Setup
-
-Run both services with Docker Compose:
+Set your Gemini API key and start both services:
 
 ```bash
-# Set your API key
-export GEMINI_API_KEY=your_gemini_api_key_here
-
-# Build and run
-docker-compose up --build
+GEMINI_API_KEY=your_gemini_api_key_here docker-compose up --build
 ```
 
-Access the app at **http://localhost:3000**.
+Frontend:
 
-## 📁 Project Structure
-
-```
-├── frontend/                 # Next.js Frontend
-│   ├── src/
-│   │   ├── app/              # App Router pages
-│   │   │   ├── layout.tsx    # Root layout with theme
-│   │   │   ├── page.tsx      # Main wizard page
-│   │   │   └── globals.css   # Design system
-│   │   ├── components/       # React components
-│   │   │   ├── FileUpload.tsx
-│   │   │   ├── DataTable.tsx
-│   │   │   ├── ResultsView.tsx
-│   │   │   ├── StepIndicator.tsx
-│   │   │   └── ThemeToggle.tsx
-│   │   ├── lib/              # Utilities
-│   │   │   ├── api.ts
-│   │   │   └── csvPreview.ts
-│   │   └── types/            # TypeScript types
-│   │       └── index.ts
-│   ├── Dockerfile
-│   └── package.json
-│
-├── backend/                  # Express.js Backend
-│   ├── src/
-│   │   ├── index.ts          # Server entry point
-│   │   ├── routes/
-│   │   │   └── import.ts     # Import API route
-│   │   ├── services/
-│   │   │   ├── aiExtractor.ts
-│   │   │   └── csvParser.ts
-│   │   ├── utils/
-│   │   │   └── prompt.ts     # AI prompt template
-│   │   └── types/
-│   │       └── crm.ts        # CRM type definitions
-│   ├── Dockerfile
-│   └── package.json
-│
-├── docker-compose.yml
-├── .gitignore
-└── README.md
+```text
+http://localhost:3000
 ```
 
-## 🎯 How It Works
+Backend:
 
-1. **Upload** — Drag & drop or browse for a CSV file
-2. **Preview** — Review your data in a responsive table
-3. **Import** — Click "Confirm Import" to trigger AI extraction
-4. **Results** — View extracted CRM records and skipped entries
+```text
+http://localhost:3001
+```
 
-The AI intelligently maps columns like:
-- `"Phone Number"` → `mobile_without_country_code`
-- `"Full Name"` or `"First Name" + "Last Name"` → `name`
-- `"Organisation"` or `"Business"` → `company`
-- `"Notes"` or `"Remarks"` → `crm_note`
+## API
 
-## 🌐 Deployment
+### `POST /api/import`
 
-### Frontend (Vercel)
+Accepts a CSV file upload using form-data field `file`.
 
-1. Push your code to GitHub
-2. Import the `frontend` folder into [Vercel](https://vercel.com)
-3. Set the root directory to `frontend`
-4. Add environment variable: `NEXT_PUBLIC_API_URL=https://your-backend.railway.app/api`
-5. Deploy
+Response:
 
-### Backend (Railway)
+```json
+{
+  "records": [],
+  "skipped": [],
+  "totalImported": 0,
+  "totalSkipped": 0
+}
+```
 
-1. Push your code to GitHub
-2. Create a new project on [Railway](https://railway.app)
-3. Connect your GitHub repo, set root directory to `backend`
-4. Add environment variables:
-   - `GEMINI_API_KEY=your_key`
-   - `PORT=3001`
-   - `FRONTEND_URL=https://your-frontend.vercel.app`
-5. Deploy
+## Tests and Checks
 
-## 📊 CRM Fields Extracted
+Backend tests:
 
-| Field | Description |
-|-------|-------------|
-| `created_at` | Lead creation date |
-| `name` | Lead name |
-| `email` | Primary email |
-| `country_code` | Phone country code |
-| `mobile_without_country_code` | Mobile number |
-| `company` | Company name |
-| `city` | City |
-| `state` | State |
-| `country` | Country |
-| `lead_owner` | Lead owner |
-| `crm_status` | Lead status (enum) |
-| `crm_note` | Notes/remarks |
-| `data_source` | Lead source (enum) |
-| `possession_time` | Property possession time |
-| `description` | Additional description |
+```bash
+cd backend
+npm test
+```
 
-## 📝 License
+Backend typecheck:
 
-MIT
+```bash
+cd backend
+npm run typecheck
+```
+
+Frontend lint:
+
+```bash
+cd frontend
+npm run lint
+```
+
+Frontend production build:
+
+```bash
+cd frontend
+npm run build
+```
+
+## Project Structure
+
+```text
+backend/
+  src/
+    routes/
+      import.ts
+    services/
+      aiExtractor.ts
+      csvParser.ts
+    types/
+      crm.ts
+    utils/
+      prompt.ts
+frontend/
+  src/
+    app/
+    components/
+    lib/
+    types/
+test-data/
+docker-compose.yml
+README.md
+```
+
+## Test Data
+
+The `test-data` folder includes sample CSV files for:
+
+- Standard clean CRM data
+- Facebook lead exports
+- Google Ads exports
+- Real estate CRM exports
+- Messy manually created spreadsheets
+
+These files are useful for checking AI mapping behavior across different layouts.

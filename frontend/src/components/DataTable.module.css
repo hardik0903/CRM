@@ -104,6 +104,12 @@
   font-size: 0.75rem;
 }
 
+.spacerCell {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .footer {
   padding: var(--space-sm) var(--space-lg);
   border-top: 1px solid var(--border-color);

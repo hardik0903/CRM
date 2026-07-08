@@ -38,6 +38,16 @@ const VALID_DATA_SOURCES = new Set([
   '',
 ]);
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export interface ExtractionProgress {
+  phase: 'started' | 'batch_started' | 'batch_completed' | 'completed';
+  currentBatch: number;
+  totalBatches: number;
+  imported: number;
+  skipped: number;
+}
+
 /**
  * Initialises and returns the Gemini generative model.
  *
@@ -101,6 +111,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+function normalizeEmail(value: string): string {
+  return EMAIL_PATTERN.test(value) ? value : '';
+}
+
+function normalizeMobile(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return '';
+  return digits;
+}
+
 /**
  * Sanitises a raw CRM record from the AI response.
  *
@@ -121,6 +141,8 @@ export function sanitizeCRMRecord(raw: Partial<CRMRecord>): CRMRecord {
   const crmStatus = getString(raw.crm_status);
   const dataSource = getString(raw.data_source);
   const createdAt = getString(raw.created_at);
+  const email = normalizeEmail(getString(raw.email));
+  const mobile = normalizeMobile(getString(raw.mobile_without_country_code));
 
   // Validate created_at is parseable by new Date()
   let validCreatedAt = '';
@@ -134,9 +156,9 @@ export function sanitizeCRMRecord(raw: Partial<CRMRecord>): CRMRecord {
   return {
     created_at: validCreatedAt,
     name: getString(raw.name),
-    email: getString(raw.email),
+    email,
     country_code: getString(raw.country_code),
-    mobile_without_country_code: getString(raw.mobile_without_country_code),
+    mobile_without_country_code: mobile,
     company: getString(raw.company),
     city: getString(raw.city),
     state: getString(raw.state),
@@ -206,8 +228,24 @@ async function processBatch(
         );
       }
 
-      // Sanitise each extracted record
+      // Sanitise each extracted record, then enforce the assignment's
+      // contactability rule even if the model forgets to skip a bad row.
       const sanitizedRecords = parsed.extracted.map(sanitizeCRMRecord);
+      const extractedWithContact: CRMRecord[] = [];
+      const contactlessSkipped: SkippedRecord[] = [];
+
+      sanitizedRecords.forEach((record, idx) => {
+        if (!record.email && !record.mobile_without_country_code) {
+          contactlessSkipped.push({
+            rowIndex: idx + globalOffset,
+            originalData: records[idx] ?? {},
+            reason: 'Missing both email and mobile number.',
+          });
+          return;
+        }
+
+        extractedWithContact.push(record);
+      });
 
       // Map skipped entries to include original data and global row index
       const skipped: SkippedRecord[] = (parsed.skipped ?? []).map((s) => ({
@@ -215,12 +253,13 @@ async function processBatch(
         originalData: records[s.rowIndex] ?? {},
         reason: s.reason,
       }));
+      skipped.push(...contactlessSkipped);
 
       console.log(
-        `[Batch ${batchIndex + 1}] ✓ Extracted ${sanitizedRecords.length} records, skipped ${skipped.length}`,
+        `[Batch ${batchIndex + 1}] Extracted ${extractedWithContact.length} records, skipped ${skipped.length}`,
       );
 
-      return { extracted: sanitizedRecords, skipped };
+      return { extracted: extractedWithContact, skipped };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.error(
@@ -265,6 +304,7 @@ async function processBatch(
 export async function extractCRMRecords(
   records: RawCSVRecord[],
   headers: string[],
+  onProgress?: (progress: ExtractionProgress) => void,
 ): Promise<ImportResult> {
   const allExtracted: CRMRecord[] = [];
   const allSkipped: SkippedRecord[] = [];
@@ -274,11 +314,26 @@ export async function extractCRMRecords(
   console.log(
     `Starting AI extraction: ${records.length} records in ${totalBatches} batch(es)`,
   );
+  onProgress?.({
+    phase: 'started',
+    currentBatch: 0,
+    totalBatches,
+    imported: 0,
+    skipped: 0,
+  });
 
   for (let i = 0; i < totalBatches; i++) {
     const start = i * BATCH_SIZE;
     const end = Math.min(start + BATCH_SIZE, records.length);
     const batch = records.slice(start, end);
+
+    onProgress?.({
+      phase: 'batch_started',
+      currentBatch: i + 1,
+      totalBatches,
+      imported: allExtracted.length,
+      skipped: allSkipped.length,
+    });
 
     const { extracted, skipped } = await processBatch(
       batch,
@@ -289,11 +344,26 @@ export async function extractCRMRecords(
 
     allExtracted.push(...extracted);
     allSkipped.push(...skipped);
+
+    onProgress?.({
+      phase: 'batch_completed',
+      currentBatch: i + 1,
+      totalBatches,
+      imported: allExtracted.length,
+      skipped: allSkipped.length,
+    });
   }
 
   console.log(
     `AI extraction complete: ${allExtracted.length} imported, ${allSkipped.length} skipped`,
   );
+  onProgress?.({
+    phase: 'completed',
+    currentBatch: totalBatches,
+    totalBatches,
+    imported: allExtracted.length,
+    skipped: allSkipped.length,
+  });
 
   return {
     records: allExtracted,

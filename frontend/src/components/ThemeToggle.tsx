@@ -8,11 +8,15 @@ export default function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem('theme') as 'dark' | 'light' | null;
-    const initial = stored || 'dark';
-    setTheme(initial);
-    document.documentElement.setAttribute('data-theme', initial);
+    const timer = window.setTimeout(() => {
+      const stored = localStorage.getItem('theme') as 'dark' | 'light' | null;
+      const initial = stored || 'dark';
+      setTheme(initial);
+      setMounted(true);
+      document.documentElement.setAttribute('data-theme', initial);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const toggleTheme = useCallback(() => {

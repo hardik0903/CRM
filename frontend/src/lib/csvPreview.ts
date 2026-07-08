@@ -6,18 +6,40 @@ export interface CSVPreviewData {
   totalRows: number;
 }
 
+const PREVIEW_ROW_LIMIT = 100;
+
 export function parseCSVForPreview(file: File): Promise<CSVPreviewData> {
   return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      complete: (results) => {
-        const data = results.data as string[][];
-        if (data.length === 0) {
+    let headers: string[] = [];
+    const rows: string[][] = [];
+    let totalRows = 0;
+    let hasHeader = false;
+
+    Papa.parse<string[]>(file, {
+      step: (results) => {
+        const row = results.data.map((cell) => String(cell ?? '').trim());
+
+        if (!hasHeader) {
+          headers = row;
+          hasHeader = true;
+          return;
+        }
+
+        if (!row.some((cell) => cell !== '')) {
+          return;
+        }
+
+        totalRows += 1;
+        if (rows.length < PREVIEW_ROW_LIMIT) {
+          rows.push(row);
+        }
+      },
+      complete: () => {
+        if (!hasHeader || headers.length === 0) {
           reject(new Error('CSV file is empty'));
           return;
         }
-        const headers = data[0] || [];
-        const rows = data.slice(1).filter(row => row.some(cell => cell && cell.trim() !== ''));
-        resolve({ headers, rows, totalRows: rows.length });
+        resolve({ headers, rows, totalRows });
       },
       error: (error) => reject(error),
       skipEmptyLines: true,

@@ -74,6 +74,27 @@ describe('sanitizeCRMRecord', () => {
     expect(result.created_at).toBe('');
   });
 
+  it('should clear invalid emails and non-phone mobile values', () => {
+    const record = {
+      created_at: '', name: '', email: 'not_an_email', country_code: '', mobile_without_country_code: 'invalid_phone',
+      company: '', city: '', state: '', country: '', lead_owner: '',
+      crm_status: '', crm_note: '', data_source: '', possession_time: '', description: '',
+    };
+    const result = sanitizeCRMRecord(record as any);
+    expect(result.email).toBe('');
+    expect(result.mobile_without_country_code).toBe('');
+  });
+
+  it('should remove formatting from valid mobile values', () => {
+    const record = {
+      created_at: '', name: '', email: 'a@b.com', country_code: '+1', mobile_without_country_code: '(415) 555-0100',
+      company: '', city: '', state: '', country: '', lead_owner: '',
+      crm_status: '', crm_note: '', data_source: '', possession_time: '', description: '',
+    };
+    const result = sanitizeCRMRecord(record as any);
+    expect(result.mobile_without_country_code).toBe('4155550100');
+  });
+
   it('should default missing fields to empty string', () => {
     const partial = { email: 'test@test.com' } as any;
     const result = sanitizeCRMRecord(partial);
@@ -217,6 +238,52 @@ describe('extractCRMRecords', () => {
     expect(generateContentMock).toHaveBeenCalledTimes(2);
     expect(result.records[0].email).toBe('recovered@test.com');
   }, 10_000);
+
+  it('skips AI-extracted records that still have no email or mobile', async () => {
+    generateContentMock.mockResolvedValueOnce(
+      fakeGeminiResponse(
+        JSON.stringify({
+          extracted: [{ ...emptyRecord(), name: 'No Contact Lead' }],
+          skipped: [],
+        }),
+      ),
+    );
+
+    const result = await extractCRMRecords(
+      [{ name: 'No Contact Lead', note: 'no contact info' }],
+      ['name', 'note'],
+    );
+
+    expect(result.totalImported).toBe(0);
+    expect(result.totalSkipped).toBe(1);
+    expect(result.skipped[0].reason).toBe('Missing both email and mobile number.');
+  });
+
+  it('skips AI-extracted records when email and mobile are both invalid', async () => {
+    generateContentMock.mockResolvedValueOnce(
+      fakeGeminiResponse(
+        JSON.stringify({
+          extracted: [
+            {
+              ...emptyRecord(),
+              name: 'Bad Contact Lead',
+              email: 'not_an_email',
+              mobile_without_country_code: 'invalid_phone',
+            },
+          ],
+          skipped: [],
+        }),
+      ),
+    );
+
+    const result = await extractCRMRecords(
+      [{ name: 'Bad Contact Lead', email: 'not_an_email', phone: 'invalid_phone' }],
+      ['name', 'email', 'phone'],
+    );
+
+    expect(result.totalImported).toBe(0);
+    expect(result.totalSkipped).toBe(1);
+  });
 
   it('maps skipped rowIndex to the correct global offset across batches', async () => {
     const records = Array.from({ length: 51 }, (_, i) => ({

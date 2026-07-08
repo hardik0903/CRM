@@ -15,8 +15,8 @@ function AnimatedCounter({ value, label, color }: { value: number; label: string
 
   useEffect(() => {
     if (value === 0) {
-      setDisplayValue(0);
-      return;
+      const timer = window.setTimeout(() => setDisplayValue(0), 0);
+      return () => window.clearTimeout(timer);
     }
     let start = 0;
     const duration = 800;

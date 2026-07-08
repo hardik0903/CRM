@@ -29,4 +29,14 @@ export interface ImportResult {
   totalSkipped: number;
 }
 
+export interface ImportProgress {
+  phase: string;
+  progress: number;
+  currentBatch?: number;
+  totalBatches?: number;
+  imported?: number;
+  skipped?: number;
+  totalRecords?: number;
+}
+
 export type AppStep = 'upload' | 'preview' | 'processing' | 'results';
