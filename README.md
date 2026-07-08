@@ -2,7 +2,11 @@
 
 An intelligent CSV import pipeline that ingests lead data from **any** CSV layout — Facebook Lead Ads exports, Google Ads exports, real estate CRM dumps, sales reports, or manually maintained spreadsheets — and uses Google Gemini to map arbitrary, inconsistent column structures into a fixed, validated GrowEasy CRM schema.
 
-The core engineering problem this project solves is not CSV parsing. It is reliable, schema-constrained field mapping across heterogeneous, unpredictable input formats, delivered inside a product experience that looks and behaves like it belongs in GrowEasy itself — with production-grade handling of AI failure modes: retries, timeouts, malformed responses, and invalid enum values.
+The core engineering problem this project solves is not CSV parsing. It is reliable, schema-constrained field mapping across heterogeneous, unpredictable input formats, delivered inside a product experience that looks and behaves like it belongs in GrowEasy itself — with production-grade handling of every AI failure mode: retries, timeouts, malformed responses, invalid enum values, and total model unavailability.
+
+**Live application:** [crm-gamma-lime.vercel.app](https://crm-gamma-lime.vercel.app/)
+**Backend API:** [crm-91gx.onrender.com](https://crm-91gx.onrender.com/)
+**Position applied for:** Software Developer Intern
 
 ---
 
@@ -27,6 +31,7 @@ The core engineering problem this project solves is not CSV parsing. It is relia
 - [Sample Test Data](#sample-test-data)
 - [Environment Variables](#environment-variables)
 - [What Sets This Submission Apart](#what-sets-this-submission-apart)
+- [License](#license)
 - [Author](#author)
 
 ---
@@ -35,7 +40,7 @@ The core engineering problem this project solves is not CSV parsing. It is relia
 
 Businesses generate leads from many disconnected channels, and each channel exports data differently. A Facebook Lead Ads CSV, a Google Ads export, and a manually assembled spreadsheet from a marketing agency rarely share column names, ordering, or formatting — yet all of them ultimately need to become the same thing: a clean, structured lead record inside the CRM.
 
-This project builds that translation layer. A user uploads any valid CSV, previews the raw parsed data with zero AI involvement, explicitly confirms the import, and only then does the backend batch the records to Gemini for intelligent, schema-constrained field extraction. Every AI response is independently validated and sanitized server-side before it is trusted — the system never assumes the model's output is correct by default.
+This project builds that translation layer. A user uploads any valid CSV, previews the raw parsed data with zero AI involvement, explicitly confirms the import, and only then does the backend batch the records to Gemini for intelligent, schema-constrained field extraction. Every AI response is independently validated and sanitized server-side before it is trusted, and if the model is unavailable entirely, the system degrades gracefully to a heuristic mapper rather than losing data. The system never assumes anything — AI output or otherwise — is correct by default.
 
 ## Design Parity with the GrowEasy Product
 
@@ -59,21 +64,21 @@ The intent was to remove any doubt that this could be dropped into the existing 
 | Drag & drop **and** file picker upload | ✅ | Both supported in `FileUpload` |
 | CSV preview with no AI processing | ✅ | Client-side streaming parse; backend is not called until confirmation |
 | Responsive preview table, horizontal + vertical scrolling | ✅ | `DataTable` component |
-| Explicit confirm step gating the backend call | ✅ | Backend is only invoked after **Confirm Import** |
-| Accept any valid CSV, no fixed column assumption | ✅ | AI-driven mapping, not hardcoded column lookups |
+| Explicit confirm step gating the backend call | ✅ | Backend is only invoked after **Confirm Import**, inside `ImportModal` |
+| Accept any valid CSV, no fixed column assumption | ✅ | AI-driven mapping with a content-based heuristic fallback, not hardcoded column lookups |
 | CSV → structured record parsing | ✅ | `csvParser.ts` (PapaParse, BOM-safe) |
-| Batched AI extraction | ✅ | Batches of 50 records per Gemini call |
-| Structured JSON response | ✅ | Typed `ImportResult` returned from both endpoints |
+| Batched AI extraction | ✅ | Batches of 50 records, up to 3 processed concurrently |
+| Structured JSON response | ✅ | Enforced via Gemini's native schema-constrained output mode, not prompt-only formatting |
 | Display imported + skipped records with totals | ✅ | `ResultsView` |
 | Drag & drop upload *(bonus)* | ✅ | |
-| Progress indicators during AI processing *(bonus)* | ✅ | Real batch-level progress, not simulated |
+| Progress indicators during AI processing *(bonus)* | ✅ | Real batch-level progress over a live stream, not simulated |
 | Streaming / incremental parsing *(bonus)* | ✅ | NDJSON stream over `/api/import/stream` |
-| Retry mechanism for failed AI batches *(bonus)* | ✅ | Exponential backoff, 3 attempts |
+| Retry mechanism for failed AI batches *(bonus)* | ✅ | Exponential backoff across 3 attempts, then heuristic fallback |
 | Virtualized table for large CSVs *(bonus)* | ⚠️ Partial | Paginated rendering (50 rows/page) rather than a virtualized scroll window |
 | Dark mode *(bonus)* | ✅ | |
-| Unit tests *(bonus)* | ✅ | 29 tests, 96% coverage on the AI extraction module |
+| Unit tests *(bonus)* | ✅ | 38 tests, 92.9% statement coverage overall, 100% on schema and prompt logic |
 | Docker setup *(bonus)* | ✅ | `docker-compose.yml`, per-service `Dockerfile` |
-| Deployment *(bonus)* | ⬜ | See hosted URL in submission email |
+| Deployment *(bonus)* | ✅ | Frontend on Vercel, backend on Render — links above |
 | Well-written README *(bonus)* | ✅ | This document |
 
 ## Key Features
@@ -83,21 +88,21 @@ The intent was to remove any doubt that this could be dropped into the existing 
 | Upload | Drag-and-drop or file picker, `.csv` only, 10 MB limit |
 | Preview | Client-side streaming CSV parse and preview table — **no AI calls until confirmed** |
 | Confirmation Gate | Import only proceeds to the backend after explicit user confirmation |
-| AI Extraction | Batched Gemini calls with prompt-engineered, schema-constrained field mapping |
+| AI Extraction | Batched, concurrent Gemini calls using native structured JSON output |
 | Live Progress | Real-time NDJSON streaming of batch-by-batch progress to the UI |
-| Resilience | Automatic retry with exponential backoff on transient AI failures |
-| Validation | Server-side re-validation of every AI-returned field against strict enums and formats |
+| Resilience | Exponential-backoff retries, then a heuristic column-detection fallback if Gemini is unavailable entirely |
+| Validation | Zod-schema re-validation of every AI-returned field and the overall response shape |
 | Data Integrity | Rows with neither a valid email nor mobile number are automatically skipped, with reasons |
 | Results | Responsive tables for imported and skipped records, with import/skip totals |
 | Theming | Dark and light mode, matched to the GrowEasy product |
-| Testing | Automated unit test suite covering parsing, prompt construction, and AI extraction logic |
-| Deployment | Dockerized frontend and backend with Docker Compose orchestration |
+| Testing | 38 automated tests covering parsing, prompt construction, extraction, and fallback logic |
+| Deployment | Live on Vercel (frontend) and Render (backend), with Docker Compose for local orchestration |
 
 ## Architecture
 
 ![architecture](arch.png)
 
-A full Mermaid diagram of this pipeline, including the retry loop and validation stage, is available in [`architecture.mermaid`](./architecture.mermaid).
+A full Mermaid diagram of this pipeline, including the retry and fallback branches, is available in [`architecture.mermaid`](./architecture.mermaid).
 
 ## Tech Stack
 
@@ -106,10 +111,12 @@ A full Mermaid diagram of this pipeline, including the retry loop and validation
 | Frontend | Next.js, React, TypeScript |
 | Backend | Node.js, Express, TypeScript |
 | CSV Parsing | PapaParse (streaming, both client and server) |
-| AI | Google Gemini (`gemini-3.1-flash-lite`) |
+| AI | Google Gemini (`gemini-3.1-flash-lite`), structured JSON output mode |
+| Validation | Zod |
 | File Uploads | Multer |
 | Testing | Jest, ts-jest |
 | Containerization | Docker, Docker Compose |
+| Deployment | Vercel (frontend), Render (backend) |
 
 ## Project Structure
 
@@ -117,27 +124,30 @@ A full Mermaid diagram of this pipeline, including the retry loop and validation
 CRM/
 ├── backend/
 │   ├── src/
-│   │   ├── index.ts              # Express app entrypoint, middleware, CORS, rate limiting
+│   │   ├── index.ts                # Express entrypoint — CORS, rate limiting, trust proxy
 │   │   ├── routes/
-│   │   │   └── import.ts         # POST /api/import and /api/import/stream
+│   │   │   └── import.ts           # POST /api/import and /api/import/stream
 │   │   ├── services/
-│   │   │   ├── csvParser.ts      # CSV → structured record parsing (PapaParse)
-│   │   │   ├── aiExtractor.ts    # Gemini batching, retries, sanitization, progress events
+│   │   │   ├── csvParser.ts        # CSV → structured record parsing (PapaParse)
+│   │   │   ├── aiExtractor.ts      # Gemini batching, concurrency, retries, progress events
+│   │   │   ├── heuristicMapper.ts  # Column-detection fallback when Gemini is unavailable
 │   │   │   └── __tests__/
 │   │   ├── utils/
-│   │   │   ├── prompt.ts         # Extraction prompt construction
+│   │   │   ├── prompt.ts           # Extraction prompt construction
 │   │   │   └── __tests__/
 │   │   └── types/
-│   │       └── crm.ts            # Shared CRM record and result types
+│   │       ├── crm.ts              # Shared CRM record and result types
+│   │       └── schemas.ts          # Zod schemas for validation and sanitization
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── app/                  # Next.js app router pages
-│   │   ├── components/           # FileUpload, DataTable, ResultsView, ThemeToggle, etc.
-│   │   ├── lib/                  # api.ts (fetch + stream reader), csvPreview.ts
+│   │   ├── app/                    # Next.js app router pages
+│   │   ├── components/             # Sidebar, ImportModal, FileUpload, DataTable, ResultsView, ThemeToggle
+│   │   ├── lib/                    # api.ts (fetch + stream reader), csvPreview.ts
 │   │   └── types/
 │   └── Dockerfile
-├── test-data/                    # Sample CSVs covering diverse real-world layouts
+├── test-data/                      # Sample CSVs covering diverse real-world layouts
+├── architecture.mermaid            # Full pipeline diagram
 ├── docker-compose.yml
 └── README.md
 ```
@@ -212,16 +222,17 @@ GEMINI_API_KEY=your_gemini_api_key_here docker-compose up --build
 1. **Upload** — The user uploads a CSV file via drag-and-drop or file picker.
 2. **Preview** — The file is parsed entirely client-side, row-by-row, using a streaming parser. A preview table is shown with the total row and column count. No data leaves the browser at this stage, and no AI call is made.
 3. **Confirm** — The user reviews the preview and explicitly clicks **Confirm Import**. This is the only action that triggers a backend request.
-4. **Parse & Batch** — The backend re-parses the uploaded file and splits records into batches of 50.
-5. **AI Extraction** — Each batch is sent to Gemini with a prompt that enforces the target CRM schema, exact enum values for `crm_status` and `data_source`, and explicit rules for handling duplicate emails/phone numbers and unparseable dates.
-6. **Validation** — Every field returned by Gemini is independently re-validated server-side: enum values are checked against an allow-list, email addresses against a format pattern, dates against `Date.parse`, and phone numbers against a digit-length range. Anything that fails validation is reset to an empty string rather than trusted blindly.
-7. **Skip Logic** — Rows with neither a valid email nor a valid mobile number are excluded from the imported set and returned separately with a reason.
-8. **Live Progress** — Progress events are streamed back to the frontend as each batch completes, driving a real progress bar rather than a simulated one.
-9. **Results** — The frontend displays the imported records and skipped records in separate responsive tables, along with total counts.
+4. **Parse & Batch** — The backend re-parses the uploaded file and splits records into batches of 50, processing up to 3 batches concurrently.
+5. **AI Extraction** — Each batch is sent to Gemini using its native structured-output mode: the model is constrained to a defined JSON schema, so the response is guaranteed to be valid, well-shaped JSON without any markdown fencing or prompt-only formatting instructions to rely on. The prompt itself enforces the target CRM schema, exact enum values for `crm_status` and `data_source`, and explicit rules for handling duplicate emails/phone numbers and unparseable dates.
+6. **Validation** — Every field returned by Gemini is independently re-validated server-side through a Zod schema: enum values are checked against an allow-list, email addresses against a format pattern, dates against JavaScript's `Date` parsing, and phone numbers against a digit-length range. Anything that fails validation is reset to an empty string rather than trusted blindly. The overall response shape is validated before any per-record processing begins.
+7. **Retry & Fallback** — If a batch call fails, it's retried up to 3 times with exponential backoff (1s → 2s → 4s). If all retries are exhausted — for example during a Gemini outage — the batch falls back to a heuristic mapper that detects columns by name pattern and content analysis, so records are still recovered rather than lost entirely.
+8. **Skip Logic** — Rows with neither a valid email nor a valid mobile number are excluded from the imported set and returned separately with a reason, enforced independently of whether the AI or the heuristic mapper produced the record.
+9. **Live Progress** — Progress events are streamed back to the frontend as each batch completes, driving a real progress bar rather than a simulated one.
+10. **Results** — The frontend displays the imported records and skipped records in separate responsive tables, along with total counts.
 
 ## CRM Field Mapping
 
-The AI extraction step maps arbitrary source columns onto the following fixed schema:
+The extraction step maps arbitrary source columns onto the following fixed schema:
 
 | Field | Description |
 | --- | --- |
@@ -292,7 +303,7 @@ Identical input to `/api/import`, but streams newline-delimited JSON (NDJSON) pr
 | Frontend type check | `cd frontend && npx tsc --noEmit` |
 | Frontend production build | `cd frontend && npm run build` |
 
-The backend test suite covers CSV parsing edge cases, prompt construction, and the full AI extraction pipeline — including batching, retry-then-success, retry exhaustion, and malformed-response handling — using a mocked Gemini client so tests run deterministically without network access or a live API key.
+The current suite is **38 tests across 4 suites**, all passing, with **92.9% statement coverage** overall and 100% coverage on the schema-validation and prompt-construction modules. Coverage on `aiExtractor.ts` — the batching, concurrency, retry, and fallback logic — sits at 89.6%, using a mocked Gemini client so tests run deterministically without network access or a live API key. This includes dedicated tests for batch splitting, retry-then-succeed, retry exhaustion, malformed-response handling, and the heuristic-fallback path itself.
 
 ## Sample Test Data
 
@@ -306,7 +317,7 @@ The `test-data/` directory contains representative CSVs for validating AI mappin
 | `04_real_estate_crm.csv` | Real estate CRM export format |
 | `05_messy_manual_spreadsheet.csv` | Inconsistent, manually maintained spreadsheet |
 
-In addition to these, the system was stress-tested against a second, larger set of synthetic datasets (170–230 rows each, spanning the same five real-world categories named in the assignment) purpose-built to exercise multi-batch AI extraction, duplicate-contact merging, and the no-email/no-mobile skip rule at volume rather than on a handful of sample rows.
+In addition to these, the system was stress-tested against a second, larger set of synthetic datasets (170–230 rows each, spanning the same five real-world categories named in the assignment) purpose-built to exercise multi-batch, concurrent AI extraction, duplicate-contact merging, and the no-email/no-mobile skip rule at volume rather than on a handful of sample rows.
 
 ## Environment Variables
 
@@ -327,12 +338,21 @@ In addition to these, the system was stress-tested against a second, larger set 
 ## What Sets This Submission Apart
 
 - **Product fidelity, not just feature completeness.** The reference screenshots were treated as a specification in their own right. Layout, copy, color choices (including the reference's deliberate use of orange specifically for the upload action, distinct from the brand green used elsewhere), and interaction patterns were matched intentionally — signaling product judgment, not only engineering ability.
-- **Real streaming, not a simulated progress bar.** Most take-home submissions fake progress with a `setInterval` counting up to 90%. This implementation streams genuine per-batch NDJSON events from the backend, consumed by a hand-written buffered stream reader on the frontend that correctly handles partial network chunks and a trailing unflushed line — a detail that's easy to get subtly wrong.
-- **Zero-trust handling of AI output.** Nothing returned by Gemini is written to a response without being independently re-validated server-side against the exact enum lists, an email format check, a phone-length check, and JavaScript `Date`-parseability. The system is designed around the assumption that the model will occasionally be wrong, not the hope that it won't be.
-- **Resilience engineering around the AI call itself.** Timeout wrapping, exponential backoff across three attempts, and batch-level (rather than whole-import-level) failure isolation mean one bad batch degrades gracefully instead of failing the entire import.
-- **Test coverage where it's hardest to get, not just where it's easy.** 29 automated tests reach 96% coverage on `aiExtractor.ts` — the batching, retry, and validation logic — using a mocked Gemini client. This is the file most take-home submissions leave untested because mocking an LLM call is inconvenient; it's covered here specifically because it's the highest-risk part of the system.
-- **Validated against realistic scale, not just the four sample rows in the spec.** In addition to the five reference CSVs, the system was run against a second set of larger (170–230 row), deliberately messy synthetic datasets modeled on each of the five real-world CSV categories the assignment names by name, confirming multi-batch behavior and skip-rule correctness at volume.
-- **End-to-end type safety.** Shared, explicit TypeScript types for the CRM schema and API contracts across both frontend and backend, with a clean `tsc --noEmit` on both sides — no `any`-typed escape hatches in the core data path.
+- **Schema-constrained AI output, not prompt-and-hope JSON.** Extraction uses Gemini's native structured-output mode, so the model is mechanically constrained to return a valid, well-shaped response — eliminating an entire class of "the model wrapped its JSON in markdown" or "the model added a stray sentence" failures that plague prompt-only approaches.
+- **Genuine degradation, not just degradation-shaped error handling.** Most systems either succeed or fail loudly. This one has three tiers: succeed via AI, retry with backoff, and — if Gemini is unavailable entirely after all retries — fall back to a heuristic column-detection mapper so records are still recovered rather than silently dropped during a model outage.
+- **Real streaming, not a simulated progress bar.** The backend streams genuine per-batch NDJSON events, consumed by a hand-written buffered stream reader on the frontend that correctly handles partial network chunks and a trailing unflushed line.
+- **Zero-trust handling of AI output, enforced structurally.** Nothing returned by Gemini is written to a response without being independently re-validated server-side through Zod schemas — both at the level of individual fields (enums, email format, phone length, date parseability) and at the level of the overall response shape.
+- **Concurrent batch processing.** Up to 3 batches process in parallel via a hand-rolled semaphore, rather than strictly sequential processing — real throughput work for larger CSVs, not just correctness work.
+- **Test coverage where it's hardest to get, not just where it's easy.** 38 tests reach 92.9% overall coverage, specifically including the retry-exhaustion and heuristic-fallback paths — the parts of a system like this that are easiest to leave untested because mocking an LLM call and simulating an outage is inconvenient.
+- **Validated against realistic scale, not just the four sample rows in the spec.** In addition to the five reference CSVs, the system was run against a second set of larger (170–230 row), deliberately messy synthetic datasets modeled on each of the five real-world CSV categories the assignment names by name.
+- **End-to-end type safety.** Shared, explicit TypeScript types and Zod schemas for the CRM contract across both frontend and backend, with a clean `tsc --noEmit` and zero ESLint errors on both sides.
+- **Actually deployed, not just deployable.** Both services are live at the URLs above, including real production fixes (reverse-proxy trust configuration, CORS origin normalization) that only surface once something is genuinely running behind a hosting provider's infrastructure.
+
+## License
+
+Copyright (c) 2026 Hardik Pandey. All rights reserved.
+
+This repository is made publicly available solely for the purpose of evaluation as part of a job application submission to GrowEasy. See [`LICENSE`](./LICENSE) for full terms.
 
 ## Author
 
